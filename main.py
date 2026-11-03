@@ -1,4 +1,4 @@
-import discord
+import os
 from discord.ext import commands
 from discord.ui import Button, View, Select
 import random
