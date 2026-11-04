@@ -1,311 +1,330 @@
 import os
 import discord
 from discord.ext import commands
-from discord.ui import Button, View, Select
 import random
 
-# Bot Kurulumu
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix=".", intents=intents, help_command=None)
+intents.members = True
 
-# Sahte Veritabanı (Oyuncu Bakiyeleri & Mülkleri)
-user_balances = {}
+bot = commands.Bot(command_prefix=".", intents=intents)
+bot.remove_command('help')
 
-def get_user_data(user_id):
-    if user_id not in user_balances:
-        user_balances[user_id] = {
-            "cuzdan": 0,
-            "banka": 0,
-            "deger": 0,
-            "takim": "Serbest Oyuncu",
-            "arabalar": [],
-            "evler": []
-        }
-    return user_balances[user_id]
+user_levels = {} 
 
-# ---------------------------------------------------------
-# UI BİLEŞENLERİ (BUTONLAR VE SEÇİM MENÜLERİ)
-# ---------------------------------------------------------
+SAHIB_ID = 153887690437529761 
+QEYDIYYATSIZ_ROL_ID = 1567404022795600024
+QEYDIYYATLI_ROL_ID = 1567403934186733580
+SABIT_KANAL_ID = 1567220696319266967
 
-class HelpView(View):
-    def __init__(self):
-        super().__init__(timeout=None)
-
-    @discord.ui.button(label="RP Sistemleri", style=discord.ButtonStyle.primary, emoji="⚽")
-    async def rp_help(self, interaction: discord.Interaction, button: Button):
-        embed = discord.Embed(
-            title="⚽ Atlantis League Sistemleri Yardım",
-            description="Sunucudaki temel RP ve Ekonomi komutları:",
-            color=discord.Color.blue()
-        )
-        embed.add_field(name=".bal", value="Cüzdan, banka ve değer durumunuzu gösterir.", inline=False)
-        embed.add_field(name=".pay @Kullanıcı [Miktar]", value="Başka bir oyuncuya para gönderir.", inline=False)
-        embed.add_field(name=".kap @Oyuncu [Takım]", value="Oyuncuyu kulübünüze transfer eder (Kapar).", inline=False)
-        embed.add_field(name=".galeri", value="Araba satın alım galerisini açar.", inline=False)
-        embed.add_field(name=".emlak", value="Ev/Mülk satın alım ofisini açar.", inline=False)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    @discord.ui.button(label="Yönetici Komutları", style=discord.ButtonStyle.danger, emoji="👑")
-    async def admin_help(self, interaction: discord.Interaction, button: Button):
-        embed = discord.Embed(
-            title="👑 Yönetici Sistemleri",
-            description="Yetkililerin kullanabileceği özel komutlar:",
-            color=discord.Color.red()
-        )
-        embed.add_field(name=".bal-ekle @Kullanıcı [Miktar]", value="Teknik Direktör/Başkan için bakiye ekler.", inline=False)
-        embed.add_field(name=".deger-ver @Kullanıcı [Değer] [Sebep]", value="Oyuncunun değerini günceller.", inline=False)
-        embed.add_field(name=".kapa (veya .kanal-kilitle)", value="Bulunduğunuz kanalı üyelere kapatır.", inline=False)
-        embed.add_field(name=".ac (veya .kanal-ac)", value="Kilitlenen kanalı tekrar açar.", inline=False)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-
-class CarSelect(Select):
-    def __init__(self):
-        options = [
-            discord.SelectOption(label="Porsche 911 Turbo S", description="21M Bal • +11M Değer", emoji="🏎️"),
-            discord.SelectOption(label="Range Rover SV", description="27M Bal • +18M Değer", emoji="🚘"),
-            discord.SelectOption(label="Ferrari 12Cilindri", description="35M Bal • +25M Değer", emoji="🏎️"),
-            discord.SelectOption(label="Lamborghini Revuelto", description="40M Bal • +30M Değer", emoji="🏎️"),
-            discord.SelectOption(label="Bugatti Tourbillon", description="50M Bal • +40M Değer", emoji="🏎️"),
-        ]
-        super().__init__(placeholder="Satın almak istediğin aracı seç...", min_values=1, max_values=1, options=options)
-
-    async def callback(self, interaction: discord.Interaction):
-        data = get_user_data(interaction.user.id)
-        selected_car = self.values[0]
-        data["arabalar"].append(selected_car)
-        await interaction.response.send_message(
-            f"🎉 Tebrikler! **{selected_car}** başarıyla satın alındı ve garajınıza eklendi!", 
-            ephemeral=True
-        )
-
-
-class CarGalleryView(View):
-    def __init__(self):
-        super().__init__(timeout=None)
-        self.add_item(CarSelect())
-
-
-class HouseSelect(Select):
-    def __init__(self):
-        options = [
-            discord.SelectOption(label="Şehir Manzaralı 2+1 Daire", description="9M Bal • +4M Değer", emoji="🏢"),
-            discord.SelectOption(label="Akıllı Ev Sistemli 3+1 Daire", description="14M Bal • +7M Değer", emoji="🏠"),
-            discord.SelectOption(label="Deniz Manzaralı Lüks Rezidans", description="20M Bal • +12M Değer", emoji="🏙️"),
-            discord.SelectOption(label="Özel Bahçeli Müstakil Villa", description="38M Bal • +19M Değer", emoji="🏡"),
-            discord.SelectOption(label="Atlantis Kraliyet Malikanesi", description="45M Bal • +29M Değer", emoji="🏰"),
-        ]
-        super().__init__(placeholder="Satın almak istediğin evi seç...", min_values=1, max_values=1, options=options)
-
-    async def callback(self, interaction: discord.Interaction):
-        data = get_user_data(interaction.user.id)
-        selected_house = self.values[0]
-        data["evler"].append(selected_house)
-        await interaction.response.send_message(
-            f"🏡 Tebrikler! **{selected_house}** tapusu üzerinize geçirildi!", 
-            ephemeral=True
-        )
-
-
-class HouseGalleryView(View):
-    def __init__(self):
-        super().__init__(timeout=None)
-        self.add_item(HouseSelect())
-
-
-# ---------------------------------------------------------
-# BOT ETKİNLİKLERİ VE KOMUTLAR
-# ---------------------------------------------------------
+SHIP_KART_RESIM = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1000&auto=format&fit=crop"
+LEVEL_UP_RESIM = "https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=1000&auto=format&fit=crop"
 
 @bot.event
 async def on_ready():
-    print(f"[{bot.user}] Atlantis League Botu Aktif!")
-    await bot.change_presence(activity=discord.Game(name="Atlantis League | .help"))
+    print(f'Deltac Bot tam gücü ilə işə düşdü!')
+    try:
+        synced = await bot.tree.sync()
+        print(f"Slash komutlar sinxronizasiya olundu: {len(synced)} komut.")
+    except Exception as e:
+        print(f"Xəta: {e}")
+    await bot.change_presence(activity=discord.Game(name="Deltac | /yardim"))
 
+@bot.event
+async def on_member_join(member):
+    rol = member.guild.get_role(QEYDIYYATSIZ_ROL_ID)
+    if rol:
+        try:
+            await member.add_roles(rol)
+        except:
+            pass
 
-@bot.command(name="help")
-async def help_command(ctx):
-    """Gelişmiş Atlantis League Yardım Menüsü"""
-    embed = discord.Embed(
-        title="✨ Atlantis League - Yardım Paneli",
-        description="Aşağıdaki butonları kullanarak RP komutlarını ve yetkili menülerini inceleyebilirsiniz.",
-        color=discord.Color.purple()
-    )
-    if ctx.guild and ctx.guild.icon:
-        embed.set_thumbnail(url=ctx.guild.icon.url)
-    embed.add_field(name="❓ Nasıl Başlanır?", value="📜 `.baslangic` yazarak rehber mesajını alabilirsiniz.", inline=False)
+    kanal = member.guild.get_channel(SABIT_KANAL_ID)
+    if kanal:
+        embed = discord.Embed(
+            title="Ailəmizə xoş gəldin!",
+            description=f"<a:hosgeldin:1567411922012348447> **{member.mention}**!\n\nServerimizə qoşulduğun üçün çox sevindik!",
+            color=0x151515
+        )
+        embed.set_image(url=SHIP_KART_RESIM)
+        embed.add_field(name="İstifadəçi", value=f"{member.name} (`{member.id}`)", inline=False)
+        await kanal.send(embed=embed)
+
+@bot.event
+async def on_member_remove(member):
+    kanal = member.guild.get_channel(SABIT_KANAL_ID)
+    if kanal:
+        embed = discord.Embed(
+            title="Üzv Ayrıldı",
+            description=f"<a:uzgun:1567412245892169800> **{member.name}** serverdən ayrıldı. Güle güle...",
+            color=0x992d22
+        )
+        embed.set_image(url=SHIP_KART_RESIM)
+        embed.add_field(name="İstifadəçi", value=f"{member.name}", inline=False)
+        await kanal.send(embed=embed)
+
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+
+    uid = message.author.id
+    if uid not in user_levels:
+        user_levels[uid] = [0, 1] 
     
-    view = HelpView()
-    await ctx.send(embed=embed, view=view)
+    user_levels[uid][0] += 1
+    mesaj_sayisi = user_levels[uid][0]
+    gercek_level = user_levels[uid][1]
 
+    yeni_level = mesaj_sayisi // 10 + 1
+    if yeni_level > gercek_level:
+        user_levels[uid][1] = yeni_level
+        rank_kanal = discord.utils.get(message.guild.text_channels, name="rank-up")
+        if rank_kanal:
+            embed = discord.Embed(
+                description=f"**{message.author.display_name}** Yeni səviyyəyə çatdı! Səviyyə **{yeni_level}**", 
+                color=0x111111
+            )
+            embed.set_image(url=LEVEL_UP_RESIM)
+            await rank_kanal.send(embed=embed)
 
-# --- EKONOMİ VE TRANSFER KOMUTLARI ---
+    mesaj = message.content.lower()
+    if "külbaş" in mesaj or bot.user.mentioned_in(message):
+        sert_laflar = [
+            "Ağzına soxsam boğularsane, heç danışma gecə-gecə.",
+            "O sözü özünə saxla, balacalar sənə girir daha çox o gün gördük sizi.",
+            "A kişi, sənə söz deyənə qədər adam özünə çay qoyub içər, kəs səsin."
+        ]
+        await message.channel.send(random.choice(sert_laflar))
 
-@bot.command(aliases=["bakiye", "cuzdan"])
-async def bal(ctx, member: discord.Member = None):
-    """Kullanıcının Bakiyesini ve Mülklerini Gösterir"""
+    elif "salam" in mesaj:
+        await message.channel.send("Aleykum salam, nə var nə yox?")
+
+    await bot.process_commands(message)
+
+@bot.command(name="level", aliases=["lvl"])
+async def level_komut(ctx, member: discord.Member = None):
     target = member or ctx.author
-    data = get_user_data(target.id)
-
-    embed = discord.Embed(
-        title=f"💳 {target.display_name} - Oyuncu Profili",
-        color=discord.Color.green()
-    )
-    embed.set_thumbnail(url=target.display_avatar.url)
-    embed.add_field(name="🛡️ Takımı", value=f"**{data['takim']}**", inline=False)
-    embed.add_field(name="👛 Cüzdan", value=f"{data['cuzdan']:,} Bal", inline=True)
-    embed.add_field(name="🏦 Banka", value=f"{data['banka']:,} Bal", inline=True)
-    embed.add_field(name="⭐ Oyuncu Değeri", value=f"{data['deger']:,} Bal", inline=True)
-    embed.add_field(name="🏎️ Arabalar", value=f"{len(data['arabalar'])} Adet", inline=True)
-    embed.add_field(name="🏡 Evler", value=f"{len(data['evler'])} Adet", inline=True)
-
+    data = user_levels.get(target.id, [0, 1])
+    embed = discord.Embed(title="Deltac Səviyyə Sistemi", description=f"👤 **{target.display_name}**\n📊 Səviyyə: **{data[1]}**\n💬 Mesaj Sayı: **{data[0]}**", color=0x111111)
+    embed.set_image(url=LEVEL_UP_RESIM)
     await ctx.send(embed=embed)
 
+@bot.tree.command(name="level", description="İstifadəçinin səviyyəsinə baxır")
+async def slash_level(interaction: discord.Interaction, member: discord.Member = None):
+    target = member or interaction.user
+    data = user_levels.get(target.id, [0, 1])
+    embed = discord.Embed(title="Deltac Səviyyə Sistemi", description=f"👤 **{target.display_name}**\n📊 Səviyyə: **{data[1]}**\n💬 Mesaj Sayı: **{data[0]}**", color=0x111111)
+    embed.set_image(url=LEVEL_UP_RESIM)
+    await interaction.response.send_message(embed=embed)
 
-@bot.command()
-async def pay(ctx, member: discord.Member, miktar: int):
-    """Başka Bir Oyuncuya Para Gönderir"""
-    if member.id == ctx.author.id:
-        return await ctx.send("❌ Kendine para gönderemezsin!")
-    if miktar <= 0:
-        return await ctx.send("❌ Geçerli bir miktar girmelisin!")
-
-    sender_data = get_user_data(ctx.author.id)
-
-    if sender_data["cuzdan"] < miktar:
-        return await ctx.send("❌ Cüzdanında yeterli miktarda Bal yok!")
-
-    receiver_data = get_user_data(member.id)
-    sender_data["cuzdan"] -= miktar
-    receiver_data["cuzdan"] += miktar
-
-    embed = discord.Embed(
-        title="💸 Para Transferi",
-        description=f"{ctx.author.mention}, {member.mention} kullanıcısına **{miktar:,} Bal** gönderdi!",
-        color=discord.Color.blue()
-    )
-    await ctx.send(embed=embed)
-
-
-@bot.command()
-async def kap(ctx, oyucu: discord.Member, *, takim_adi: str):
-    """Oyuncuyu Takıma Katma / Kapma Komutu"""
-    data = get_user_data(oyucu.id)
-    eski_takim = data["takim"]
-    data["takim"] = takim_adi
-
-    embed = discord.Embed(
-        title="🔥 BOMBA TRANSFER! OYUNCU KAPILDI!",
-        description=f"{oyucu.mention} isimli oyuncu başarıyla kapıldı ve kadroya katıldı!",
-        color=discord.Color.gold()
-    )
-    embed.set_thumbnail(url=oyucu.display_avatar.url)
-    embed.add_field(name="👤 Transfer Edilen Oyuncu", value=oyucu.mention, inline=True)
-    embed.add_field(name="🛡️ Yeni Takımı", value=f"**{takim_adi}**", inline=True)
-    embed.add_field(name="🔄 Eski Takımı", value=eski_takim, inline=True)
-    embed.add_field(name="✍️ İşlemi Yapan Menajer/Yetkili", value=ctx.author.mention, inline=False)
-    embed.set_footer(text="Atlantis League Transfer Pazarı")
-
-    await ctx.send(embed=embed)
-
-
-# --- YETKİLİ BAKIYE EKLEME KOMUTU (.bal-ekle) ---
-
-@bot.command(name="bal-ekle")
-@commands.has_permissions(administrator=True)
-async def bal_ekle(ctx, member: discord.Member, miktar: int = 100000000):
-    """Teknik Direktör ve Başkanlar İçin Bakiye Ekler (Varsayılan 100M)"""
-    data = get_user_data(member.id)
-    data["cuzdan"] += miktar
-
-    embed = discord.Embed(
-        title="🏦 Kulüp Kasasından Bakiye Eklendi",
-        description=f"👑 Yetkili {ctx.author.mention}, **{member.mention}** adlı kullanıcının cüzdanına **{miktar:,} Bal** ekledi!",
-        color=discord.Color.gold()
-    )
-    embed.add_field(name="💰 Güncel Cüzdan", value=f"{data['cuzdan']:,} Bal", inline=False)
-    embed.set_footer(text="Atlantis League Finans Departmanı")
+@bot.tree.command(name="levelqur", description="Yalnız sahib tərəfindən səviyyə tənzimləyir")
+async def slash_levelqur(interaction: discord.Interaction, hedef: discord.Member, yeni_level: int):
+    if interaction.user.id != SAHIB_ID:
+        await interaction.response.send_message("A kişi, bu komutu yalnız server sahibi işlədə bilər!", ephemeral=True)
+        return
     
+    if hedef.id not in user_levels:
+        user_levels[hedef.id] = [0, yeni_level]
+    else:
+        user_levels[hedef.id][1] = yeni_level
+        
+    embed = discord.Embed(title="Deltac Səviyyə Tənzimləndi", description=f"⚙️ **{hedef.display_name}** adlı istifadəçinin səviyyəsi **{yeni_level}** olaraq dəyişdirildi.", color=0x111111)
+    embed.set_image(url=LEVEL_UP_RESIM)
+    await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="yardim", description="Deltac Komut siyahısı")
+async def slash_yardim(interaction: discord.Interaction):
+    embed = discord.Embed(title="Deltac - Komutlar", color=0x111111)
+    embed.description = "• `/qeydiyyat` / `.qeydiyyat`\n• `/qver` / `.qver`\n• `/ban` / `.ban`\n• `/mute` / `.mute`\n• `/level` / `.level`\n• `/levelqur` (Sahib)\n• `/ship`\n• `/mafia`\n• `/temizle`"
+    embed.set_image(url=SHIP_KART_RESIM)
+    await interaction.response.send_message(embed=embed)
+
+@bot.command(name="yardim", aliases=["help"])
+async def yardim(ctx):
+    embed = discord.Embed(title="Deltac - Komutlar", color=0x111111)
+    embed.description = "• `.qeydiyyat`\n• `.qver`\n• `.ban`\n• `.mute`\n• `.level`\n• `.ship`\n• `.mafia`\n• `.temizle [sayı]`"
+    embed.set_image(url=SHIP_KART_RESIM)
     await ctx.send(embed=embed)
 
-
-# --- YETKİLİ KANAL KİLİTLEME KOMUTLARI ---
-
-@bot.command(aliases=["kapa"])
-@commands.has_permissions(manage_channels=True)
-async def kanal_kilitle(ctx):
-    """Bulunulan Kanalı Yazışmaya Kapatır"""
-    await ctx.channel.set_permissions(ctx.guild.default_role, send_messages=False)
-    await ctx.send("🔒 Bu kanal yetkili tarafından üyelerin yazışmasına kapatıldı!")
-
-@bot.command(aliases=["ac"])
-@commands.has_permissions(manage_channels=True)
-async def kanal_ac(ctx):
-    """Kilitlenen Kanalı Tekrar Açar"""
-    await ctx.channel.set_permissions(ctx.guild.default_role, send_messages=True)
-    await ctx.send("🔓 Bu kanal tekrar üyelerin yazışmasına açıldı!")
-
-
-# --- RP PANELERİ VE MAĞAZALAR ---
-
-@bot.command()
-async def baslangic(ctx):
-    """Atlantis League Başlangıç Rehberi Panelini Açar"""
-    embed = discord.Embed(
-        title="💫 Atlantis League Başlangıç Rehberi",
-        description="**Atlantis League'e hoş geldin.**\nKaydını tamamla, oyuncunu geliştir ve ilk takımını bul.",
-        color=discord.Color.gold()
-    )
-    embed.add_field(name="📝 İlk Gün Planım", value="1. Kayıt Ol\n2. Antrenman Yap\n3. Takım Bul", inline=False)
+@bot.command(name="qeydiyyat", aliases=["qeq"])
+@commands.has_permissions(manage_roles=True)
+async def qeydiyyat(ctx, member: discord.Member, *, isim: str):
+    q_rol = ctx.guild.get_role(QEYDIYYATLI_ROL_ID)
+    sz_rol = ctx.guild.get_role(QEYDIYYATSIZ_ROL_ID)
+    if q_rol: await member.add_roles(q_rol)
+    if sz_rol and sz_rol in member.roles: await member.remove_roles(sz_rol)
     
-    view = View()
-    view.add_item(Button(label="Kayıt Ol", style=discord.ButtonStyle.primary, emoji="👤"))
-    view.add_item(Button(label="Değer Kazan", style=discord.ButtonStyle.success, emoji="💶"))
-    view.add_item(Button(label="Takım Bul", style=discord.ButtonStyle.secondary, emoji="🛡️"))
+    embed = discord.Embed(title="Qeydiyyat Uğurlu", description=f"✅ **{member.display_name}** -> **{isim}** olaraq qeydiyyatdan keçdi.", color=0x111111)
+    embed.set_image(url=SHIP_KART_RESIM)
+    await ctx.send(embed=embed)
+
+@bot.tree.command(name="qeydiyyat", description="İstifadəçini qeydiyyatdan keçirir")
+async def slash_qeydiyyat(interaction: discord.Interaction, member: discord.Member, isim: str):
+    q_rol = interaction.guild.get_role(QEYDIYYATLI_ROL_ID)
+    sz_rol = interaction.guild.get_role(QEYDIYYATSIZ_ROL_ID)
+    if q_rol: await member.add_roles(q_rol)
+    if sz_rol and sz_rol in member.roles: await member.remove_roles(sz_rol)
     
+    embed = discord.Embed(title="Qeydiyyat Uğurlu", description=f"✅ **{member.display_name}** -> **{isim}** olaraq qeydiyyatdan keçdi.", color=0x111111)
+    embed.set_image(url=SHIP_KART_RESIM)
+    await interaction.response.send_message(embed=embed)
+
+@bot.command(name="qver")
+@commands.has_permissions(manage_roles=True)
+async def qver(ctx, member: discord.Member):
+    sz_rol = ctx.guild.get_role(QEYDIYYATSIZ_ROL_ID)
+    if sz_rol: await member.add_roles(sz_rol)
+    
+    embed = discord.Embed(title="Rol Verildi", description=f"✨ **{member.display_name}** adlı istifadəçiyə Qeydiyyatsız rolu verildi.", color=0x111111)
+    embed.set_image(url=SHIP_KART_RESIM)
+    await ctx.send(embed=embed)
+
+@bot.tree.command(name="qver", description="İstifadəçiyə qeydiyyatsız rolu verir")
+async def slash_qver(interaction: discord.Interaction, member: discord.Member):
+    sz_rol = interaction.guild.get_role(QEYDIYYATSIZ_ROL_ID)
+    if sz_rol: await member.add_roles(sz_rol)
+    
+    embed = discord.Embed(title="Rol Verildi", description=f"✨ **{member.display_name}** adlı istifadəçiyə Qeydiyyatsız rolu verildi.", color=0x111111)
+    embed.set_image(url=SHIP_KART_RESIM)
+    await interaction.response.send_message(embed=embed)
+
+@bot.command(name="ban")
+@commands.has_permissions(ban_members=True)
+async def ban(ctx, member: discord.Member, *, sebep="Göstərilməyib"):
+    await member.ban(reason=sebep)
+    embed = discord.Embed(title="İstifadəçi Edam Olundu (Ban)", description=f"🔨 **{member.display_name}** serverdən qovuldu.\nSəbəb: {sebep}", color=0x992d22)
+    embed.set_image(url=SHIP_KART_RESIM)
+    await ctx.send(embed=embed)
+
+@bot.tree.command(name="ban", description="İstifadəçini ban edir")
+async def slash_ban(interaction: discord.Interaction, member: discord.Member, sebep: str = "Göstərilməyib"):
+    await member.ban(reason=sebep)
+    embed = discord.Embed(title="İstifadəçi Edam Olundu (Ban)", description=f"🔨 **{member.display_name}** serverdən qovuldu.\nSəbəb: {sebep}", color=0x992d22)
+    embed.set_image(url=SHIP_KART_RESIM)
+    await interaction.response.send_message(embed=embed)
+
+@bot.command(name="mute")
+@commands.has_permissions(manage_roles=True)
+async def mute(ctx, member: discord.Member, *, sebep="Göstərilməyib"):
+    embed = discord.Embed(title="Səssizə Alındı (Mute)", description=f"🔇 **{member.display_name}** zindana atıldı.\nSəbəb: {sebep}", color=0xfee75c)
+    embed.set_image(url=SHIP_KART_RESIM)
+    await ctx.send(embed=embed)
+
+@bot.tree.command(name="mute", description="İstifadəçini mute edir")
+async def slash_mute(interaction: discord.Interaction, member: discord.Member, sebep: str = "Göstərilməyib"):
+    embed = discord.Embed(title="Səssizə Alındı (Mute)", description=f"🔇 **{member.display_name}** zindana atıldı.\nSəbəb: {sebep}", color=0xfee75c)
+    embed.set_image(url=SHIP_KART_RESIM)
+    await interaction.response.send_message(embed=embed)
+
+# --- SHIP SİSTEMİ ---
+class ShipView(discord.ui.View):
+    def __init__(self, author, target):
+        super().__init__(timeout=30)
+        self.author = author
+        self.target = target
+
+    @discord.ui.button(label="Sənə uyğun değil", style=discord.ButtonStyle.danger)
+    async def uygun_deyil(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.author:
+            await interaction.response.send_message("Bu düymə sənə aid deyil qardaş.", ephemeral=True)
+            return
+        await interaction.response.send_message(f"{self.author.display_name} bu ship işinə nöqtə qoydu, uyğun gəlmədi.", ephemeral=True)
+
+    @discord.ui.button(label="Şarkınız", style=discord.ButtonStyle.secondary)
+    async def sarkiniz(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.author:
+            await interaction.response.send_message("Bu düymə sənə aid deyil qardaş.", ephemeral=True)
+            return
+        sarkiler = ["Qara Gözlüm", "Sevgi Delilikdir", "Köhnə Məhəllə", "Gecənin Səsi"]
+        await interaction.response.send_message(f"🎶 Sizin ortaq mahnınız: **{random.choice(sarkiler)}**", ephemeral=True)
+
+    @discord.ui.button(label="Yenidən ship", style=discord.ButtonStyle.blurple)
+    async def yeniden(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.author:
+            await interaction.response.send_message("Bu düymə sənə aid deyil qardaş.", ephemeral=True)
+            return
+        faiz = random.randint(1, 100)
+        
+        if 0 <= faiz <= 30:
+            emoji = "<a:uzgun:1567412245892169800>"
+        elif 31 <= faiz <= 60:
+            emoji = "<a:ship:1567413599159459944>"
+        else:
+            emoji = "<a:senicokseviyorum:1567413691500990548>"
+
+        metin = f"## {emoji} {self.author.display_name} <a:ship:1567413599159459944> {self.target.display_name}\n> Uyğunluq: **%{faiz}**\n\n"
+        if faiz < 50:
+            metin += f"{emoji} Hələ ki bir-birlərinə salam belə verməyiblər, deyəsən bu sevgi \"ghost\" rejimində başlayır.\n-# 50%-dən aşağı uyğunluqda evlənmək mümkün deyil."
+        else:
+            metin += f"{emoji} Alovlu sevgi başladı! Deyəsən bu işin sonu toydu."
+        
+        embed = discord.Embed(color=0x111111, description=metin)
+        embed.set_image(url=SHIP_KART_RESIM)
+        await interaction.response.edit_message(content=None, embed=embed, view=self)
+
+@bot.command(name="ship")
+async def ship(ctx, member: discord.Member = None):
+    if not member:
+        await ctx.send("Kiminlə ship eləmək istəyirsən? Məsələn: `.ship @İstifadəçi` yaz.")
+        return
+    if member == ctx.author:
+        await ctx.send("Öz-özünlə ship eləyə bilməzsən qardaş.")
+        return
+
+    faiz = random.randint(1, 100)
+    
+    if 0 <= faiz <= 30:
+        emoji = "<a:uzgun:1567412245892169800>"
+    elif 31 <= faiz <= 60:
+        emoji = "<a:ship:1567413599159459944>"
+    else:
+        emoji = "<a:senicokseviyorum:1567413691500990548>"
+
+    metin = f"## {emoji} {ctx.author.display_name} <a:ship:1567413599159459944> {member.display_name}\n> Uyğunluq: **%{faiz}**\n\n"
+    if faiz < 50:
+        metin += f"{emoji} Hələ ki bir-birlərinə salam belə verməyiblər, deyəsən bu sevgi \"ghost\" rejimində başlayır.\n-# 50%-dən aşağı uyğunluqda evlənmək mümkün deyil."
+    else:
+        metin += f"{emoji} Alovlu sevgi başladı! Deyəsən bu işin sonu toydu."
+
+    embed = discord.Embed(color=0x111111, description=metin)
+    embed.set_image(url=SHIP_KART_RESIM)
+    
+    view = ShipView(ctx.author, member)
     await ctx.send(embed=embed, view=view)
 
+@bot.command(name="mafia")
+async def mafia(ctx):
+    roller = ["Mafiya başçısı", "Polis", "Həkim", "Sadə vətəndaş", "Killer", "Oğraş"]
+    secilen = random.choice(roller)
+    await ctx.send(f"Mafiya oyununda sənə düşən rol: {secilen}")
 
-@bot.command()
-async def galeri(ctx):
-    """Araba Satın Alım Menüsü"""
-    embed = discord.Embed(
-        title="🚘 Atlantis League Araç Galerisi",
-        description="2026 model seçkin araçları incelemek ve satın almak için aşağıdaki menüyü kullanın.\n\n"
-                    "• Satın alma işlemi onay ekranından sonra tamamlanır.\n"
-                    "• Her araç yalnızca bir kez alınabilir.",
-        color=discord.Color.dark_gray()
-    )
-    await ctx.send(embed=embed, view=CarGalleryView())
+@bot.tree.command(name="mafia", description="Mafya oyunundaki rolünüzü belirler")
+async def slash_mafia(interaction: discord.Interaction):
+    roller = ["Mafiya başçısı", "Polis", "Həkim", "Sadə vətəndaş", "Killer", "Oğraş"]
+    secilen = random.choice(roller)
+    await interaction.response.send_message(f"Mafiya oyununda sənə düşən rol: **{secilen}**")
 
+@bot.command(name="temizle")
+@commands.has_permissions(manage_messages=True)
+async def temizle(ctx, limit: int = 10):
+    if limit > 100: limit = 100
+    await ctx.message.delete()
+    silinen = await ctx.channel.purge(limit=limit)
+    msg = await ctx.send(f"🧹 Uğurla {len(silinen)} mesaj təmizləndi.")
+    await msg.delete(delay=4)
 
-@bot.command()
-async def emlak(ctx):
-    """Ev Satın Alım Menüsü"""
-    embed = discord.Embed(
-        title="🏡 Atlantis League Emlak Ofisi",
-        description="Modern dairelerden kraliyet malikanelerine kadar mülkleri incelemek için aşağıdaki menüyü kullanın.",
-        color=discord.Color.green()
-    )
-    await ctx.send(embed=embed, view=HouseGalleryView())
+@bot.tree.command(name="temizle", description="Belirtilen sayıda mesajı siler")
+async def slash_temizle(interaction: discord.Interaction, limit: int = 10):
+    if not interaction.user.guild_permissions.manage_messages:
+        await interaction.response.send_message("Bu komut için mesajları yönet yetkisi lazım!", ephemeral=True)
+        return
+    if limit > 100: limit = 100
+    await interaction.response.defer(ephemeral=True)
+    silinen = await interaction.channel.purge(limit=limit)
+    await interaction.followup.send(f"🧹 Uğurla {len(silinen)} mesaj təmizləndi.")
 
+TOKEN = os.getenv("TOKEN")
+bot.run(TOKEN)
 
-@bot.command(name="deger-ver")
-@commands.has_permissions(administrator=True)
-async def deger_ver(ctx, uye: discord.Member, yeni_deger: str, *, sebep: str = "Açıklama belirtilmedi"):
-    """Yöneticilerin Değer Logu Geçmesini Sağlar"""
-    embed = discord.Embed(
-        title="🟡 Değer Verildi",
-        color=discord.Color.gold()
-    )
-    embed.add_field(name="👤 Üye", value=uye.mention, inline=False)
-    embed.add_field(name="📈 Yeni Değer", value=yeni_deger, inline=False)
-    embed.add_field(name="📌 Sebep", value=sebep, inline=False)
-    embed.add_field(name="👑 Yetkili", value=ctx.author.mention, inline=False)
-    embed.set_footer(text=f"Zaman › {ctx.message.created_at.strftime('%d %B %Y %H:%M')}")
-    
-    await ctx.send(embed=embed)
-
-
-bot.run(os.environ.get("DISCORD_TOKEN"))
+        
